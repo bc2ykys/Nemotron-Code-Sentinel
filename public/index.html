@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nemotron Code Sentinel</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+  <!-- Marked.js for Markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- DOMPurify for XSS sanitization -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+  <!-- Highlight.js for code syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script>
+    // CDN fallbacks: if libs fail to load from CDN, provide minimal stubs
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof marked === 'undefined') {
+        window.marked = { parse: (s) => '<pre>' + s.replace(/</g,'&lt;') + '</pre>' };
+        console.warn('marked.js CDN failed — using plaintext fallback');
+      }
+      if (typeof DOMPurify === 'undefined') {
+        window.DOMPurify = { sanitize: (s) => s.replace(/<script[\s\S]*?<\/script>/gi, '') };
+        console.warn('DOMPurify CDN failed — using basic fallback');
+      }
+      if (typeof hljs === 'undefined') {
+        window.hljs = { highlightElement: () => {} };
+        console.warn('highlight.js CDN failed — code will not be highlighted');
+      }
+    });
+  </script>
+  <style>
+    /* ─── CSS Reset & Variables ───────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #111827;
+      --bg-card: #1a2332;
+      --bg-input: #0d1520;
+      --border: #1e2d3d;
+      --border-active: #76b900;
+      --text-primary: #e5e7eb;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent: #76b900;
+      --accent-hover: #8bd000;
+      --accent-dim: rgba(118, 185, 0, 0.15);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --info: #3b82f6;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.3);
+      --transition: 0.2s ease;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ─── Header ──────────────────────────────────────────── */
+    .header {
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      font-size: 28px;
+      filter: drop-shadow(0 0 8px var(--accent));
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), #a0d911);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .header h1 span {
+      font-weight: 400;
+      font-size: 14px;
+      display: block;
+      background: none;
+      -webkit-text-fill-color: var(--text-muted);
+    }
+
+    .badge-nvidia {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    /* ─── Layout ──────────────────────────────────────────── */
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px 32px;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      min-height: calc(100vh - 140px);
+    }
+
+    /* ─── Cards ───────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-header {
+      padding: 14px 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .card-header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-body {
+      padding: 16px 20px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── Code Editor ─────────────────────────────────────── */
+    .code-editor {
+      width: 100%;
+      flex: 1;
+      min-height: 350px;
+      background: var(--bg-input);
+      color: #e5e7eb;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      resize: vertical;
+      outline: none;
+      transition: border-color var(--transition);
+      tab-size: 4;
+    }
+
+    .code-editor:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    /* ─── Controls Bar ────────────────────────────────────── */
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .mode-btn {
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+
+    .mode-btn:hover {
+      border-color: var(--accent);
+      color: var(--text-primary);
+      background: var(--accent-dim);
+    }
+
+    .mode-btn.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    select.lang-select {
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .btn-group-right {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .run-btn {
+      padding: 10px 28px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: linear-gradient(135deg, var(--accent), #5a9400);
+      color: #000;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all var(--transition);
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .run-btn:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--accent-hover), var(--accent));
+      box-shadow: 0 0 20px rgba(118, 185, 0, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .run-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .run-btn.secondary {
+      background: var(--bg-secondary);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+      padding: 10px 18px;
+      font-size: 13px;
+    }
+
+    .run-btn.secondary:hover:not(:disabled) {
+      background: var(--accent-dim);
+      box-shadow: none;
+    }
+
+    /* ─── Results Panel ───────────────────────────────────── */
+    .results-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      text-align: center;
+      gap: 16px;
+      color: var(--text-muted);
+      padding: 40px;
+    }
+
+    .placeholder-icon {
+      font-size: 64px;
+      opacity: 0.3;
+    }
+
+    .placeholder h3 { font-size: 18px; color: var(--text-secondary); }
+    .placeholder p { font-size: 14px; max-width: 340px; }
+
+    /* ─── Reasoning Trace ─────────────────────────────────── */
+    .reasoning-section {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--info);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .reasoning-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      color: var(--info);
+      font-size: 13px;
+      font-weight: 600;
+      width: 100%;
+      text-align: left;
+      transition: background var(--transition);
+    }
+
+    .reasoning-toggle:hover { background: rgba(59, 130, 246, 0.05); }
+
+    .reasoning-toggle .chevron {
+      transition: transform var(--transition);
+      font-size: 10px;
+    }
+
+    .reasoning-toggle.open .chevron { transform: rotate(90deg); }
+
+    .reasoning-content {
+      padding: 0 16px 14px 16px;
+      font-family: 'Cascadia Code', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .reasoning-content.open { display: block; }
+
+    /* ─── Download & Action Buttons ───────────────────────── */
+    .action-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 10px 0;
+    }
+
+    .action-btn {
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .action-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    /* ─── Diff Viewer ─────────────────────────────────────── */
+    .diff-viewer {
+      display: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .diff-viewer.active { display: block; }
+
+    .diff-header {
+      display: flex;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .diff-header span {
+      flex: 1;
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .diff-header span:first-child {
+      color: var(--danger);
+      border-right: 1px solid var(--border);
+    }
+
+    .diff-header span:last-child { color: var(--success); }
+
+    .diff-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .diff-pane {
+      padding: 12px;
+      font-family: 'Cascadia Code', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      background: var(--bg-input);
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .diff-pane:first-child { border-right: 1px solid var(--border); }
+
+    .diff-pane .line-del { background: rgba(239, 68, 68, 0.1); color: #fca5a5; display: block; }
+    .diff-pane .line-add { background: rgba(16, 185, 129, 0.1); color: #6ee7b7; display: block; }
+
+    /* ─── Report Markdown ─────────────────────────────────── */
+    .report-content {
+      line-height: 1.8;
+    }
+
+    .report-content h2 {
+      font-size: 20px;
+      margin: 20px 0 12px 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    .report-content h3 {
+      font-size: 16px;
+      margin: 16px 0 8px 0;
+      color: var(--accent);
+    }
+
+    .report-content p { margin: 8px 0; }
+    .report-content ul, .report-content ol { padding-left: 24px; margin: 8px 0; }
+    .report-content li { margin: 4px 0; }
+
+    .report-content strong { color: var(--text-primary); }
+
+    .report-content code {
+      background: var(--bg-input);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'Cascadia Code', monospace;
+    }
+
+    .report-content pre {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    .report-content pre code {
+      background: transparent;
+      padding: 0;
+      font-size: 13px;
+    }
+
+    .report-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 13px;
+    }
+
+    .report-content th, .report-content td {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+
+    .report-content th {
+      background: var(--bg-secondary);
+      font-weight: 600;
+    }
+
+    /* ─── Stats Bar ───────────────────────────────────────── */
+    .stats-bar {
+      display: flex;
+      gap: 20px;
+      padding: 10px 16px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+    }
+
+    .stat { display: flex; align-items: center; gap: 5px; }
+    .stat-value { color: var(--accent); font-weight: 600; }
+
+    /* ─── Loading Animation ───────────────────────────────── */
+    .loading-overlay {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      gap: 20px;
+      padding: 40px;
+    }
+
+    .loading-overlay.active { display: flex; }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      color: var(--text-secondary);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .loading-text .step {
+      color: var(--accent);
+      font-weight: 600;
+      display: block;
+      margin-top: 4px;
+      font-size: 13px;
+    }
+
+    /* ─── Example Buttons ─────────────────────────────────── */
+    .examples-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .example-btn {
+      padding: 5px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .example-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ─── Responsive ──────────────────────────────────────── */
+    @media (max-width: 1024px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .container { padding: 16px; }
+      .header { padding: 12px 16px; }
+      .diff-body { grid-template-columns: 1fr; }
+      .diff-pane:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Header ──────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">🛡️</div>
+      <h1>
+        Nemotron Code Sentinel
+        <span>Autonomous AI Code Review &amp; Security Agent</span>
+      </h1>
+    </div>
+    <span class="badge-nvidia">⚡ NVIDIA Nemotron</span>
+  </header>
+
+  <!-- ─── Main Content ────────────────────────────────────── -->
+  <div class="container">
+    <div class="main-grid">
+
+      <!-- LEFT: Code Input Panel -->
+      <div class="card">
+        <div class="card-header">
+          <h2>📝 Source Code</h2>
+          <div class="examples-row">
+            <button class="example-btn" onclick="loadExample('sql')">SQL Injection</button>
+            <button class="example-btn" onclick="loadExample('auth')">Broken Auth</button>
+            <button class="example-btn" onclick="loadExample('bugs')">Buggy Logic</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <textarea
+            id="codeInput"
+            class="code-editor"
+            spellcheck="false"
+            placeholder="Paste your code here for analysis...
+
+Nemotron Code Sentinel will:
+  🔍 Audit code quality &amp; logic
+  🛡️ Scan for security vulnerabilities
+  🔧 Generate self-healing patches
+  🧪 Write automated unit tests"
+          ></textarea>
+
+          <div class="controls">
+            <button class="mode-btn active" data-mode="audit" onclick="selectMode(this)">🔍 Audit</button>
+            <button class="mode-btn" data-mode="security" onclick="selectMode(this)">🛡️ Security</button>
+            <button class="mode-btn" data-mode="patch" onclick="selectMode(this)">🔧 Patch</button>
+            <button class="mode-btn" data-mode="tests" onclick="selectMode(this)">🧪 Tests</button>
+
+            <select class="lang-select" id="langSelect">
+              <option value="">Auto-detect</option>
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="go">Go</option>
+              <option value="rust">Rust</option>
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+              <option value="c">C</option>
+            </select>
+
+            <div class="btn-group-right">
+              <button class="run-btn secondary" id="fullScanBtn" onclick="runFullScan()" title="Run all 4 analysis modes sequentially">
+                🔄 Full Scan
+              </button>
+              <button class="run-btn" id="runBtn" onclick="runAnalysis()">
+                ▶ Analyze
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Results Panel -->
+      <div class="card">
+        <div class="card-header">
+          <h2>📊 Analysis Report</h2>
+          <div id="statsBar" class="stats-bar" style="display:none;">
+            <div class="stat">⏱ <span class="stat-value" id="statTime">-</span></div>
+            <div class="stat">🔤 <span class="stat-value" id="statTokens">-</span></div>
+            <div class="stat">🤖 <span class="stat-value" id="statModel">-</span></div>
+          </div>
+        </div>
+        <div class="card-body" id="resultsBody">
+
+          <!-- Placeholder (shown initially) -->
+          <div class="placeholder" id="placeholder">
+            <div class="placeholder-icon">🛡️</div>
+            <h3>Ready to Analyze</h3>
+            <p>Paste your code, select an analysis mode, and click <strong>Analyze</strong> to let Nemotron's reasoning engine inspect your code.</p>
+          </div>
+
+          <!-- Loading (shown during API call) -->
+          <div class="loading-overlay" id="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">
+              Nemotron is analyzing your code...
+              <span class="step" id="loadingStep">🧠 Running deep reasoning chain</span>
+            </div>
+          </div>
+
+          <!-- Results (shown after analysis) -->
+          <div class="results-panel" id="results" style="display:none;">
+            <!-- Action buttons (download, diff toggle) -->
+            <div class="action-bar" id="actionBar" style="display:none;">
+              <button class="action-btn" onclick="downloadReport()">📄 Download Report</button>
+              <button class="action-btn" id="downloadPatchBtn" style="display:none;" onclick="downloadPatchedCode()">🔧 Download Patch</button>
+              <button class="action-btn" id="downloadTestsBtn" style="display:none;" onclick="downloadTests()">🧪 Download Tests</button>
+              <button class="action-btn" id="toggleDiffBtn" style="display:none;" onclick="toggleDiffView()">↔️ Toggle Diff View</button>
+            </div>
+
+            <!-- Diff Viewer (for patch mode) -->
+            <div class="diff-viewer" id="diffViewer">
+              <div class="diff-header">
+                <span>❌ Original Code</span>
+                <span>✅ Patched Code</span>
+              </div>
+              <div class="diff-body">
+                <div class="diff-pane" id="diffOriginal"></div>
+                <div class="diff-pane" id="diffPatched"></div>
+              </div>
+            </div>
+
+            <div class="reasoning-section" id="reasoningSection" style="display:none;">
+              <button class="reasoning-toggle" id="reasoningToggle" onclick="toggleReasoning()">
+                <span class="chevron">▶</span>
+                🧠 Nemotron Reasoning Trace (Chain-of-Thought)
+              </button>
+              <div class="reasoning-content" id="reasoningContent"></div>
+            </div>
+            <div class="report-content" id="reportContent"></div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── JavaScript ────────────────────────────────────────── -->
+  <script>
+    let selectedMode = "audit";
+    let lastResult = null;          // store latest analysis result
+    let lastOriginalCode = "";      // store the original code for diff
+    let lastPatchReport = null;     // store patch-mode report separately for full scan
+    let lastTestsReport = null;     // store tests-mode report separately for full scan
+
+    // ─── Example Code Samples ──────────────────────────────
+    const EXAMPLES = {
+      sql: `import sqlite3
+
+def get_user(username, password):
+    """Login function - find user by credentials"""
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    
+    # Build query with user input
+    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
+    cursor.execute(query)
+    
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+def update_profile(user_id, data):
+    """Update user profile from form data"""
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    
+    for key, value in data.items():
+        query = f"UPDATE users SET {key}='{value}' WHERE id={user_id}"
+        cursor.execute(query)
+    
+    conn.commit()
+    conn.close()
+
+# API endpoint handler
+def handle_login(request):
+    username = request.form['username']
+    password = request.form['password']  # Stored as plaintext
+    
+    user = get_user(username, password)
+    if user:
+        return {"status": "ok", "token": username + ":" + password}  # Token = credentials
+    return {"status": "fail"}`,
+
+      auth: `const express = require('express');
+const jwt = require('jsonwebtoken');
+const app = express();
+
+const SECRET_KEY = "mysecretkey123";  // Hardcoded secret
+const users = {};
+
+app.post('/register', (req, res) => {
+  const { username, password, role } = req.body;
+  // User can set their own role including "admin"
+  users[username] = { password: password, role: role || 'user' };
+  res.json({ message: 'Registered!' });
+});
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const user = users[username];
+  
+  if (user && user.password === password) {  // Plaintext comparison
+    const token = jwt.sign(
+      { username, role: user.role },
+      SECRET_KEY,
+      { expiresIn: '30d' }  // Token valid for 30 days
+    );
+    res.json({ token });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
+// Admin route - no middleware protection
+app.get('/admin/users', (req, res) => {
+  const token = req.headers.authorization;
+  const decoded = jwt.decode(token);  // decode, not verify!
+  
+  if (decoded.role === 'admin') {
+    res.json(users);  // Returns all users with passwords
+  }
+});
+
+app.delete('/admin/user/:id', (req, res) => {
+  // No authorization check at all
+  delete users[req.params.id];
+  res.json({ message: 'User deleted' });
+});
+
+app.listen(3000);`,
+
+      bugs: `def binary_search(arr, target):
+    """Search for target in sorted array"""
+    left = 0
+    right = len(arr)  # Bug: should be len(arr) - 1
+    
+    while left < right:  # Bug: should be left <= right
+        mid = (left + right) / 2  # Bug: should use // for integer division
+        
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            left = mid  # Bug: should be mid + 1
+        else:
+            right = mid  # Bug: should be mid - 1
+    
+    return -1
+
+
+def process_data(items):
+    """Process a list of data items"""
+    results = []
+    
+    for i in range(len(items)):
+        item = items[i]
+        
+        if item['type'] == 'A':
+            value = item['value'] * 2
+            results.append(value)
+        elif item['type'] == 'B':
+            value = item['value'] / item['count']  # Bug: division by zero
+            results.append(value)
+        # Bug: type 'C' silently ignored
+    
+    # Bug: modifying list while iterating
+    for r in results:
+        if r > 100:
+            results.remove(r)
+    
+    return results
+
+
+class UserCache:
+    """Simple user cache with no eviction"""
+    _cache = {}  # Bug: shared mutable class variable
+    
+    def __init__(self, max_size=100):
+        self.max_size = max_size
+    
+    def get(self, user_id):
+        return self._cache[user_id]  # Bug: KeyError if not found
+    
+    def set(self, user_id, data):
+        self._cache[user_id] = data  # Bug: never checks max_size
+    
+    def clear_old(self):
+        for key in self._cache:  # Bug: modifying dict while iterating
+            if self._cache[key].get('expired'):
+                del self._cache[key]`,
+    };
+
+    // ─── Utility: Sanitize HTML ────────────────────────────
+    function sanitizeHtml(rawHtml) {
+      if (typeof DOMPurify !== 'undefined') {
+        return DOMPurify.sanitize(rawHtml);
+      }
+      // Fallback: strip script tags
+      return rawHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ─── Mode Selection ────────────────────────────────────
+    function selectMode(btn) {
+      document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      selectedMode = btn.dataset.mode;
+    }
+
+    // ─── Load Example ──────────────────────────────────────
+    function loadExample(name) {
+      const editor = document.getElementById("codeInput");
+      editor.value = EXAMPLES[name] || "";
+      editor.focus();
+
+      // Auto-select language
+      const langSelect = document.getElementById("langSelect");
+      if (name === "auth") langSelect.value = "javascript";
+      else langSelect.value = "python";
+
+      // Auto-select best mode
+      const modeMap = { sql: "security", auth: "security", bugs: "patch" };
+      const autoMode = modeMap[name] || "audit";
+      document.querySelectorAll(".mode-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.mode === autoMode);
+      });
+      selectedMode = autoMode;
+    }
+
+    // ─── Toggle Reasoning Trace ────────────────────────────
+    function toggleReasoning() {
+      const toggle = document.getElementById("reasoningToggle");
+      const content = document.getElementById("reasoningContent");
+      toggle.classList.toggle("open");
+      content.classList.toggle("open");
+    }
+
+    // ─── Toggle Diff View ──────────────────────────────────
+    function toggleDiffView() {
+      const diffViewer = document.getElementById("diffViewer");
+      diffViewer.classList.toggle("active");
+    }
+
+    // ─── Extract code blocks from report ───────────────────
+    function extractCodeBlocks(report) {
+      const blocks = [];
+      const regex = /```[\w]*\n([\s\S]*?)```/g;
+      let match;
+      while ((match = regex.exec(report)) !== null) {
+        blocks.push(match[1].trim());
+      }
+      return blocks;
+    }
+
+    // ─── Download Helpers ──────────────────────────────────
+    function downloadFile(filename, content) {
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    function downloadReport() {
+      if (!lastResult) return;
+      const content = `# ${lastResult.modeLabel} Report\n\nModel: ${lastResult.model}\nTime: ${lastResult.timestamp}\nTokens: ${lastResult.usage?.total_tokens || 'N/A'}\n\n---\n\n${lastResult.report}`;
+      downloadFile(`sentinel-report-${lastResult.mode}.md`, content);
+    }
+
+    function downloadPatchedCode() {
+      if (!lastResult) return;
+      // Use patch-specific report if available (from full scan), else use lastResult
+      const reportText = lastPatchReport || lastResult.report;
+      const blocks = extractCodeBlocks(reportText);
+      const patched = blocks.sort((a, b) => b.length - a.length)[0] || reportText;
+      const lang = document.getElementById("langSelect").value;
+      const ext = { python: "py", javascript: "js", typescript: "ts", go: "go", rust: "rs", java: "java", cpp: "cpp", c: "c" }[lang] || "txt";
+      downloadFile(`patched-code.${ext}`, patched);
+    }
+
+    function downloadTests() {
+      if (!lastResult) return;
+      // Use tests-specific report if available (from full scan), else use lastResult
+      const reportText = lastTestsReport || lastResult.report;
+      const blocks = extractCodeBlocks(reportText);
+      const tests = blocks.sort((a, b) => b.length - a.length)[0] || reportText;
+      const lang = document.getElementById("langSelect").value;
+      const ext = { python: "py", javascript: "test.js", typescript: "test.ts", go: "_test.go", rust: "rs", java: "java", cpp: "cpp", c: "c" }[lang] || "txt";
+      downloadFile(`test_suite.${ext}`, tests);
+    }
+
+    // ─── Populate Diff View ────────────────────────────────
+    function populateDiffView(originalCode, report) {
+      const blocks = extractCodeBlocks(report);
+      const patchedCode = blocks.sort((a, b) => b.length - a.length)[0];
+      if (!patchedCode) return;
+
+      const diffOriginal = document.getElementById("diffOriginal");
+      const diffPatched = document.getElementById("diffPatched");
+
+      const origLines = originalCode.split("\n");
+      const patchLines = patchedCode.split("\n");
+
+      // Build sets of line content for quick lookup, tracking count of each line
+      const origCounts = new Map();
+      origLines.forEach(l => { const t = l.trimEnd(); origCounts.set(t, (origCounts.get(t) || 0) + 1); });
+      const patchCounts = new Map();
+      patchLines.forEach(l => { const t = l.trimEnd(); patchCounts.set(t, (patchCounts.get(t) || 0) + 1); });
+
+      diffOriginal.innerHTML = origLines.map(line => {
+        const t = line.trimEnd();
+        const inPatch = patchCounts.get(t) || 0;
+        const inOrig = origCounts.get(t) || 0;
+        if (t && inPatch < inOrig) {
+          return `<span class="line-del">${escapeHtml(line)}</span>`;
+        }
+        return escapeHtml(line) + "\n";
+      }).join("");
+
+      diffPatched.innerHTML = patchLines.map(line => {
+        const t = line.trimEnd();
+        const inOrig = origCounts.get(t) || 0;
+        const inPatch = patchCounts.get(t) || 0;
+        if (t && inOrig < inPatch) {
+          return `<span class="line-add">${escapeHtml(line)}</span>`;
+        }
+        return escapeHtml(line) + "\n";
+      }).join("");
+    }
+
+    // ─── Show Results ──────────────────────────────────────
+    function displayResults(data, originalCode) {
+      lastResult = data;
+      lastOriginalCode = originalCode;
+
+      document.getElementById("loading").classList.remove("active");
+      document.getElementById("results").style.display = "flex";
+
+      // Reasoning trace
+      const reasoningSection = document.getElementById("reasoningSection");
+      if (data.reasoning) {
+        reasoningSection.style.display = "block";
+        document.getElementById("reasoningContent").textContent = data.reasoning;
+        // Collapse by default
+        document.getElementById("reasoningToggle").classList.remove("open");
+        document.getElementById("reasoningContent").classList.remove("open");
+      } else {
+        reasoningSection.style.display = "none";
+      }
+
+      // Render markdown report with XSS sanitization
+      const rawHtml = marked.parse(data.report || "*No report generated.*");
+      document.getElementById("reportContent").innerHTML = sanitizeHtml(rawHtml);
+
+      // Syntax highlight code blocks (skip already-highlighted)
+      document.querySelectorAll("#reportContent pre code:not([data-highlighted])").forEach((block) => {
+        hljs.highlightElement(block);
+      });
+
+      // Action bar — always show report download
+      document.getElementById("actionBar").style.display = "flex";
+
+      // Show patch-specific buttons
+      const isPatch = data.mode === "patch";
+      const isTests = data.mode === "tests";
+      document.getElementById("downloadPatchBtn").style.display = isPatch ? "flex" : "none";
+      document.getElementById("toggleDiffBtn").style.display = isPatch ? "flex" : "none";
+      document.getElementById("downloadTestsBtn").style.display = isTests ? "flex" : "none";
+
+      // Populate diff view for patch mode
+      if (isPatch) {
+        populateDiffView(originalCode, data.report);
+      } else {
+        document.getElementById("diffViewer").classList.remove("active");
+      }
+
+      // Stats bar
+      document.getElementById("statsBar").style.display = "flex";
+      document.getElementById("statTime").textContent = `${(data.elapsed_ms / 1000).toFixed(1)}s`;
+      document.getElementById("statTokens").textContent = `${data.usage?.total_tokens || "?"} tokens`;
+      document.getElementById("statModel").textContent = data.model || "nemotron";
+    }
+
+    // ─── Set UI to Loading State ───────────────────────────
+    const BTN_LABELS = { runBtn: "▶ Analyze", fullScanBtn: "🔄 Full Scan" };
+
+    function setLoading(isLoading, btnId) {
+      const targetBtnId = btnId || "runBtn";
+      const runBtn = document.getElementById("runBtn");
+      const fullScanBtn = document.getElementById("fullScanBtn");
+      if (isLoading) {
+        runBtn.disabled = true;
+        fullScanBtn.disabled = true;
+        document.getElementById(targetBtnId).innerHTML = "⏳ Analyzing...";
+        document.getElementById("placeholder").style.display = "none";
+        document.getElementById("results").style.display = "none";
+        document.getElementById("loading").classList.add("active");
+      } else {
+        runBtn.disabled = false;
+        fullScanBtn.disabled = false;
+        // Restore correct label for each button
+        runBtn.innerHTML = BTN_LABELS.runBtn;
+        fullScanBtn.innerHTML = BTN_LABELS.fullScanBtn;
+      }
+    }
+
+    // ─── Run Single Analysis ───────────────────────────────
+    async function runAnalysis() {
+      const code = document.getElementById("codeInput").value.trim();
+      if (!code) {
+        alert("Please paste some code to analyze.");
+        return;
+      }
+
+      const language = document.getElementById("langSelect").value;
+      setLoading(true);
+      lastPatchReport = null;
+      lastTestsReport = null;
+
+      const loadingSteps = [
+        "🧠 Running deep reasoning chain...",
+        "🔍 Analyzing code structure and patterns...",
+        "📋 Generating detailed report...",
+      ];
+      let stepIdx = 0;
+      const stepInterval = setInterval(() => {
+        stepIdx = (stepIdx + 1) % loadingSteps.length;
+        document.getElementById("loadingStep").textContent = loadingSteps[stepIdx];
+      }, 3000);
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, mode: selectedMode, language }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Analysis failed");
+        }
+
+        clearInterval(stepInterval);
+        displayResults(data, code);
+
+      } catch (err) {
+        clearInterval(stepInterval);
+        document.getElementById("loading").classList.remove("active");
+        document.getElementById("results").style.display = "flex";
+        document.getElementById("reasoningSection").style.display = "none";
+        document.getElementById("actionBar").style.display = "none";
+
+        const errorMsg = err.name === 'AbortError'
+          ? 'Request timed out after 2 minutes. The API may be overloaded — try again.'
+          : escapeHtml(err.message);
+
+        document.getElementById("reportContent").innerHTML = `
+          <div style="color: var(--danger); padding: 20px; border: 1px solid var(--danger); border-radius: 8px; background: rgba(239,68,68,0.05);">
+            <h3>❌ Error</h3>
+            <p>${errorMsg}</p>
+            <p style="color: var(--text-muted); margin-top: 8px; font-size: 13px;">
+              Check that the server is running and your API key is valid.
+            </p>
+          </div>`;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ─── Run Full Scan (All 4 Modes) via /api/fullscan ────
+    async function runFullScan() {
+      const code = document.getElementById("codeInput").value.trim();
+      if (!code) {
+        alert("Please paste some code to analyze.");
+        return;
+      }
+
+      const language = document.getElementById("langSelect").value;
+      setLoading(true, "fullScanBtn");
+
+      const modeLabels = { audit: "🔍 Code Audit", security: "🛡️ Security Scan", patch: "🔧 Auto-Patch", tests: "🧪 Test Generator" };
+
+      document.getElementById("loadingStep").textContent = "🔄 Running full scan (4 modes)...";
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 min for 4 modes
+
+        const res = await fetch("/api/fullscan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, language }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Full scan failed");
+
+        const { results, totalTokens, totalTime } = data;
+
+        // Build combined report and collect per-mode reports
+        let fullReport = "";
+        let allReasoning = "";
+        let model = "";
+        lastPatchReport = null;
+        lastTestsReport = null;
+
+        for (const r of results) {
+          const label = modeLabels[r.mode] || r.modeLabel;
+          fullReport += `\n\n---\n\n# ${label}\n\n${r.report}`;
+          model = r.model;
+
+          if (r.reasoning) {
+            allReasoning += `\n\n── ${label} ──\n${r.reasoning}`;
+          }
+
+          if (r.mode === "patch") lastPatchReport = r.report;
+          if (r.mode === "tests") lastTestsReport = r.report;
+        }
+
+        document.getElementById("loading").classList.remove("active");
+        document.getElementById("results").style.display = "flex";
+
+        lastResult = {
+          mode: "fullscan",
+          modeLabel: "🔄 Full Scan",
+          reasoning: allReasoning || null,
+          report: fullReport,
+          usage: { total_tokens: totalTokens },
+          model,
+          elapsed_ms: totalTime,
+          timestamp: new Date().toISOString(),
+        };
+        lastOriginalCode = code;
+
+        // Reasoning traces
+        const reasoningSection = document.getElementById("reasoningSection");
+        if (allReasoning) {
+          reasoningSection.style.display = "block";
+          document.getElementById("reasoningContent").textContent = allReasoning;
+          document.getElementById("reasoningToggle").classList.remove("open");
+          document.getElementById("reasoningContent").classList.remove("open");
+        } else {
+          reasoningSection.style.display = "none";
+        }
+
+        const rawHtml = marked.parse(fullReport);
+        document.getElementById("reportContent").innerHTML = sanitizeHtml(rawHtml);
+        document.querySelectorAll("#reportContent pre code:not([data-highlighted])").forEach(block => hljs.highlightElement(block));
+
+        document.getElementById("actionBar").style.display = "flex";
+        document.getElementById("downloadPatchBtn").style.display = lastPatchReport ? "flex" : "none";
+        document.getElementById("downloadTestsBtn").style.display = lastTestsReport ? "flex" : "none";
+        document.getElementById("toggleDiffBtn").style.display = lastPatchReport ? "flex" : "none";
+
+        // Populate diff from patch report
+        if (lastPatchReport) {
+          populateDiffView(code, lastPatchReport);
+        }
+
+        document.getElementById("statsBar").style.display = "flex";
+        document.getElementById("statTime").textContent = `${(totalTime / 1000).toFixed(1)}s`;
+        document.getElementById("statTokens").textContent = `${totalTokens} tokens`;
+        document.getElementById("statModel").textContent = model || "nemotron";
+
+      } catch (err) {
+        document.getElementById("loading").classList.remove("active");
+        document.getElementById("results").style.display = "flex";
+        document.getElementById("actionBar").style.display = "none";
+        document.getElementById("reasoningSection").style.display = "none";
+
+        const errorMsg = err.name === 'AbortError'
+          ? 'Full scan timed out. Try individual modes instead.'
+          : escapeHtml(err.message);
+
+        document.getElementById("reportContent").innerHTML = `
+          <div style="color: var(--danger); padding: 20px; border: 1px solid var(--danger); border-radius: 8px; background: rgba(239,68,68,0.05);">
+            <h3>❌ Full Scan Error</h3>
+            <p>${errorMsg}</p>
+          </div>`;
+      } finally {
+        setLoading(false, "fullScanBtn");
+      }
+    }
+
+    // ─── Tab key support in editor ─────────────────────────
+    document.getElementById("codeInput").addEventListener("keydown", function (e) {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + "    " + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 4;
+      }
+    });
+  </script>
+</body>
+</html>
